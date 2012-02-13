@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xmlns:spring="http://www.springframework.org/schema/beans"
+      xmlns:file="http://www.mulesoft.org/schema/mule/file"
+      xmlns:pgp="http://www.mulesoft.org/schema/mule/pgp"
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/3.2/mule.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/3.2/mule-file.xsd
+http://www.mulesoft.org/schema/mule/pgp http://www.mulesoft.org/schema/mule/pgp/3.2/mule-pgp.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+">
+    <spring:beans>
+        <spring:bean id="pgpKeyManager" class="org.mule.module.pgp.PGPKeyRingImpl" init-method="initialise">
+            <spring:property name="publicKeyRingFileName" value="pubring.gpg"/>
+            <spring:property name="secretKeyRingFileName" value="secring.gpg"/>
+            <!--<spring:property name="secretAliasId" value="-8138140727415475738"/>-->
+            <!--<spring:property name="secretAliasId" value="10753638983154147"/>-->
+            <spring:property name="secretAliasId" value="-2545368991351349478"/>
+            <spring:property name="secretPassphrase" value="thepassphrase"/>
+        </spring:bean>
+
+        <spring:bean id="credentialAccessor" class="com.example.FakeCredentialAccessor">
+            <spring:property name="credentials"
+                value="Bugs Bunny &lt;bugs@example.com&gt;"/>
+        </spring:bean>
+    </spring:beans>
+
+    <pgp:security-manager>
+        <pgp:security-provider name="pgpSecurityProvider" keyManager-ref="pgpKeyManager" />
+        <pgp:keybased-encryption-strategy name="keyBasedEncryptionStrategy"
+                                          credentialsAccessor-ref="credentialAccessor"
+                                          keyManager-ref="pgpKeyManager"/>
+    </pgp:security-manager>
+
+    <encrypt-transformer name="encryptTransformer" strategy-ref="keyBasedEncryptionStrategy"/>
+
+    <file:connector name="output"
+                    autoDelete="true"
+                    streaming="true"
+                    outputPattern="#[string:#[header:originalFilename].pgp]"
+                    pollingFrequency="1800000"/>
+    <flow name="Large File Flow" processingStrategy="asynchronous">
+        <file:inbound-endpoint name="fileIn" path="\tmp\largeFilesInbound"/>
+        <logger message="Encryption started..." level="INFO"/>
+        <file:outbound-endpoint name="fileOut" path="\tmp\largeFilesOutbound" transformer-refs="encryptTransformer"/>
+        <logger message="Encryption ended..." level="INFO"/>
+    </flow>
+</mule>
